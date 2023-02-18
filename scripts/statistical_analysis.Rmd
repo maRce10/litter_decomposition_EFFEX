@@ -1,0 +1,807 @@
+---
+title: <font size="7"><b>Statistical analysis</b></font>
+subtitle: <font size="4"><b>Litter decomposition</b> <br> Universidad de Costa Rica</font>
+author: <font size="3"><a href="marceloarayasalas.weebly.com/">Marcelo Araya Salas</a> & Andrea Vincent</font>
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    css: extra.css
+    df_print: tibble
+    highlight: pygments  
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+fontsize: 12pt 
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- this code add line numbers to code blocks -->
+<style>
+body
+  { counter-reset: source-line 0; }
+pre.numberSource code
+  { counter-reset: none; }
+</style>
+
+
+<!-- skyblue box -->
+
+<div class="alert alert-info">
+
+# Purpose
+
+- Evaluate role of nutrient availability on litter decomposition
+
+</div>
+
+&nbsp; 
+
+```{r load packages, echo = FALSE, message = FALSE, warning=FALSE}
+
+# remotes::install_github("rlesur/klippy")
+
+# github packages must include user name ("user/package")
+pkgs <- c("rlesur/klippy", "kableExtra", "knitr", "readxl", "ggplot2", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "viridis", "brms")
+
+# install/ load packages
+sketchy::load_packages(pkgs, quite = TRUE, upgrade.deps = TRUE)
+# this is a customized printing for data frames 
+# screws up tibble function
+tibble <- function(x, ...) { 
+  x <- kbl(x, digits=4, align= 'c', row.names = FALSE) 
+   x <- kable_styling(x, position ="center", full_width = FALSE,  bootstrap_options = c("striped", "hover", "condensed", "responsive")) 
+   asis_output(x)
+}
+
+registerS3method("knit_print", "data.frame", tibble)
+
+# this one makes the Rmarkdown found files using the project main folder as it base directory
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+knitr::opts_chunk$set(
+  class.source = "numberLines lineAnchors", # for code line numbers
+  tidy.opts = list(width.cutoff = 65, keep.blank.line=FALSE), # to wrap code
+  tidy = TRUE,
+  message = FALSE,
+  # class.source = "watch-out",
+  warning = FALSE,
+  message = FALSE
+ )
+
+# to add copy button to code blocks
+klippy::klippy(position = c('top', 'right'))
+
+```
+
+```{r functions and global parameters, echo = FALSE, message = FALSE, warning=FALSE}
+
+cols <- viridis(10, alpha = 0.7)
+
+# brms models
+chains <- 4
+iters <- 10000
+
+# set ggplot2 them
+ggplot2::theme_set(theme_classic(base_size = 20))
+
+
+# standard error
+se <- function(x) sd(x) / sqrt(length(x))
+
+source("~/Dropbox/R_package_testing/brmsish/R/html_summary.R")
+# print results brms models
+# html_summary <- function(x, gsub.pattern = NULL, gsub.replacement = NULL, xlab = "Effect size"){
+#   
+#   summ <- summary(x)$fixed
+#   fit <- x$fit  
+#   betas <- grep("^b_", names(fit@sim$samples[[1]]), value = TRUE)  
+#   hdis <- t(sapply(betas, function(y)   hdi(fit@sim$samples[[1]][[y]]))
+# )
+#   summ_table <- data.frame(summ, hdis, iterations = attr(fit, "stan_args")[[1]]$iter, chains = length(attr(fit, "stan_args")))
+#   summ_table <- summ_table[rownames(summ_table) != "Intercept", c("Estimate", "Rhat", "Bulk_ESS", "l.95..CI", "u.95..CI", "iterations", "chains")]
+#   
+#   summ_table <- as.data.frame(summ_table)  
+#   summ_table$Rhat <- round(summ_table$Rhat, digits = 3)  
+#   summ_table$CI_low <- round(unlist(summ_table$l.95..CI), digits = 3)  
+#   summ_table$CI_high <- round(unlist(summ_table$u.95..CI), digits = 3)  
+#   summ_table$l.95..CI <- summ_table$u.95..CI <- NULL
+#   
+#     out <- lapply(betas, function(y)  data.frame(variable = y, value = sort(fit@sim$samples[[1]][[y]], decreasing = FALSE)))
+#   
+#   posteriors <- do.call(rbind, out)
+#   posteriors <- posteriors[posteriors$variable != "b_Intercept", ]
+#   
+#   if (!is.null(gsub.pattern) & !is.null(gsub.replacement))
+#     posteriors$variable <- gsub(pattern = gsub.pattern, replacement = gsub.replacement, posteriors$variable)
+#   
+#    gg <- ggplot(data = posteriors, aes(y = variable, x = value, fill = stat(quantile))) + 
+#   geom_density_ridges_gradient(quantile_lines = TRUE, quantile_fun = HDInterval::hdi,  vline_linetype = 2) + 
+#   theme_classic() + 
+#       labs(x = xlab, y = "Predictor") + 
+#      xlim(range(c(min(summ_table[ , "CI_low"]), max(summ_table[ , "CI_high"])), 0)) +
+#   geom_vline(xintercept = 0, col = "red") + 
+#   scale_fill_manual(values = c("transparent", "#21908C4D", "transparent"), guide = "none") + ggtitle(x$formula)
+# 
+#   if (!is.null(gsub.pattern) & !is.null(gsub.replacement))
+#     rownames(summ_table) <- gsub(pattern = gsub.pattern, replacement = gsub.replacement, rownames(summ_table))
+#    
+#   summ_table$Rhat <- ifelse(summ_table$Rhat > 1.05, cell_spec(summ_table$Rhat, "html", color ="white", background = "red", bold = TRUE,  font_size = 12),  cell_spec(summ_table$Rhat, "html"))
+#   
+#   signif <- summ_table[,"CI_low"] * summ_table[,"CI_high"] > 0
+#   
+#   df1 <- kbl(summ_table, row.names = TRUE, escape = FALSE, format = "html", digits = 3)
+#     
+#   df1 <- row_spec(kable_input = df1,row =  which(summ_table$CI_low * summ_table$CI_high > 0), background = adjustcolor(cols[9], alpha.f = 0.3))
+# 
+#   df1 <- kable_styling(df1, bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE, font_size = 12)
+#   
+#   print(df1)
+#   
+#   print(gg)
+# 
+# }
+
+
+```
+
+
+# Read data
+
+## Nutrient change
+
+### Nitrogen 
+
+Content
+```{r}
+
+nutr <- read.csv("./data/raw/litter-nutrients-mas.csv")
+
+nutr$plot.f <- as.factor(nutr$plot)
+
+nutr$days.sc <- scale(nutr$days)
+
+nutr$litter.n.content.prop.initial <- nutr$litter.n.content.perc.initial / 100
+
+# remove plot 9
+sub.nutr <- nutr[nutr$plot != 9, ]
+
+agg_n <- aggregate(litter.n.content.perc.initial ~ colecta + treat + days, nutr, mean)
+
+agg_n$sd <- aggregate(litter.n.content.perc.initial ~ colecta + treat + days, nutr, sd)$litter.n.content.perc.initial
+
+agg_n$se <- aggregate(litter.n.content.perc.initial  ~ colecta + treat + days, nutr, se)$litter.n.content.perc.initial
+
+agg_n$treat <- factor(agg_n$treat, levels = c("C", "N", "P", "NP"))
+
+pd <- position_dodge(15)
+
+ggplot(agg_n, aes(x = days, y = litter.n.content.perc.initial, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = litter.n.content.perc.initial + se, ymin = litter.n.content.perc.initial - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter N content (% initial)", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_n$days),
+    labels = unique(agg_n$days)) + theme(legend.position = c(0.9, 0.8))
+
+```
+
+```{r, eval = FALSE}
+
+fit.n <- brm(litter.n.content.prop.initial ~  treat * days.sc + (1 | plot.f), data = nutr, chains = chains, family = Beta(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+
+saveRDS(fit.n, "./data/processed/litter.n.content.rem_model.RDS")
+```
+
+```{r, results='asis', warning=FALSE}
+
+html_summary(read.file = "./data/processed/litter.n.content.rem_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+Concentration
+
+```{r}
+
+agg_n <- aggregate(perc.n ~ colecta + treat + days, nutr, mean)
+
+agg_n$sd <- aggregate(perc.n ~ colecta + treat + days, nutr, sd)$perc.n
+
+agg_n$se <- aggregate(perc.n  ~ colecta + treat + days, nutr, se)$perc.n
+
+agg_n$treat <- factor(agg_n$treat, levels = c("C", "N", "P", "NP"))
+
+pd <- position_dodge(15)
+
+ggplot(agg_n, aes(x = days, y = perc.n, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = perc.n + se, ymin = perc.n - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter N concentration (%)", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_n$days),
+    labels = unique(agg_n$days)) + theme(legend.position = c(0.3, 0.8)) 
+
+```
+
+```{r, eval = FALSE}
+
+nutr$prop.n <- nutr$perc.n / 100
+
+fit.perc.n <- brm(prop.n ~  treat * days.sc + (1 | plot.f), data = nutr, chains = chains, family = Beta(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit.perc.n, "./data/processed/litter.n.perc_model.RDS")
+
+```
+
+```{r, results='asis'}
+
+html_summary(read.file = "./data/processed/litter.n.perc_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+
+### Phosphorus 
+
+Content
+```{r}
+
+nutr$litter.p.content.prop.initial <- nutr$litter.p.content.perc.initial / 100
+
+# excluding plot 9
+agg_p <- aggregate(litter.p.content.perc.initial ~ colecta + treat + days, sub.nutr, mean)
+
+agg_p$sd <- aggregate(litter.p.content.perc.initial ~ colecta + treat + days, sub.nutr, sd)$litter.p.content.perc.initial
+
+agg_p$se <- aggregate(litter.p.content.perc.initial  ~ colecta + treat + days, sub.nutr, se)$litter.p.content.perc.initial
+
+
+agg_p$treat <- factor(agg_p$treat, levels = c("C", "N", "P", "NP"))
+
+
+pd <- position_dodge(15)
+
+ggplot(agg_p, aes(x = days, y = litter.p.content.perc.initial, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = litter.p.content.perc.initial + se, ymin = litter.p.content.perc.initial - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter P content (% initial)", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_p$days),
+    labels = unique(agg_p$days)) + theme(legend.position = c(0.9, 0.8))
+
+```
+
+```{r, eval = FALSE}
+
+fit.p <- brm(litter.p.content.prop.initial ~  treat * days.sc + (1 | plot.f), data = nutr, chains = chains, iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit.p, "./data/processed/litter.p.content.rem_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/litter.p.content.rem_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+Concentration
+
+```{r}
+
+agg_p <- aggregate(perc.p ~ colecta + treat + days, sub.nutr, mean)
+
+agg_p$sd <- aggregate(perc.p ~ colecta + treat + days, sub.nutr, sd)$perc.p
+
+agg_p$se <- aggregate(perc.p  ~ colecta + treat + days, sub.nutr, se)$perc.p
+
+agg_p$treat <- factor(agg_p$treat, levels = c("C", "N", "P", "NP"))
+
+pd <- position_dodge(15)
+
+ggplot(agg_p, aes(x = days, y = perc.p, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = perc.p + se, ymin = perc.p - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter P concentration (%)", color = "Treatment")  +
+scale_x_continuous(breaks = unique(agg_p$days),
+    labels = unique(agg_p$days)) + theme(legend.position = c(0.9, 0.8))
+
+```
+
+```{r, eval = FALSE}
+
+# convert to proportions to use beta distribution
+sub.nutr$prop.p <- sub.nutr$perc.p / 100
+
+fit.perc.p <- brm(prop.p ~  treat * days.sc + (1 | plot.f), data = sub.nutr, chains = chains, family = Beta(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit.perc.p, "./data/processed/litter.p.perc_model.RDS")
+
+```
+
+```{r, results='asis'}
+
+html_summary(read.file = "./data/processed/litter.p.perc_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+<div class="alert alert-success">
+
+# Takeaways
+
+- Litter P content is significantly lower in plus N treatment plots than in control plot, after accounting for variation explained by time 
+
+</div>
+
+&nbsp;
+
+Remaining litter 
+
+```{r, eval = TRUE, out.width = "100%", echo = FALSE, fig.align= "center"}
+
+dat <- read_excel("./data/raw/litter_data.xlsx")
+
+dat$plot.f <- as.factor(dat$plot)
+
+dat$prop.litter.rem <- dat$perc.litter.rem / 100
+
+dat$days.sc <- scale(dat$days)
+
+agg_rem <- aggregate(perc.litter.rem ~ colecta + trat + days, dat, mean)
+
+agg_rem$sd <- aggregate(perc.litter.rem  ~ colecta + trat + days, dat, sd)$perc.litter.rem
+
+agg_rem$se <- aggregate(perc.litter.rem  ~ colecta + trat + days, dat, se)$perc.litter.rem
+
+agg_rem <- agg_rem[order(agg_rem$trat), ]
+
+pd <- position_dodge(15)
+
+ggplot(agg_rem, aes(x = days, y = perc.litter.rem, color = trat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = perc.litter.rem + se, ymin = perc.litter.rem - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter mass remaining (%)", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_rem$days),
+    labels = unique(agg_rem$days)) + theme(legend.position = c(0.9, 0.8))
+
+
+```
+
+```{r, eval = FALSE}
+
+fit <- brm(prop.litter.rem ~  trat * days.sc + (1 | plot.f), data = dat, chains = chains, family = Beta(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+
+saveRDS(fit, "./data/processed/prop.litter.rem_model.RDS")
+
+dat$days.fc <- as.numeric(as.factor(dat$days))
+
+# monotonic effect of time
+fit_mo <- brm(prop.litter.rem ~  trat * mo(days.fc) + (1 | plot.f), data = dat, chains = chains, family = Beta(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_mo, "./data/processed/prop.litter.rem_model_monotonic.RDS")
+```
+
+```{r, results='asis'}
+
+html_summary(read.file = "./data/processed/prop.litter.rem_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+html_summary(read.file = "./data/processed/prop.litter.rem_model_monotonic.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+
+Remaining wood 
+
+```{r, eval = TRUE, out.width = "100%", echo = FALSE, fig.align= "center"}
+
+agg_rem_w <- aggregate(perc.wood.rem ~ colecta + trat + days, dat, mean)
+
+agg_rem_w$sd <- aggregate(perc.wood.rem  ~ colecta + trat + days, dat, sd)$perc.litter.rem
+
+agg_rem_w$se <- aggregate(perc.wood.rem  ~ colecta + trat + days, dat, se)$perc.wood.rem
+
+pd <- position_dodge(15)
+
+ggplot(agg_rem_w, aes(x = days, y = perc.wood.rem, color = trat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = perc.wood.rem + se, ymin = perc.wood.rem - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Wood mass remaining (%)", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_rem_w$days),
+    labels = unique(agg_rem_w$days)) + theme(legend.position = c(0.9, 0.8)) 
+
+
+```
+&nbsp; 
+
+```{r, eval = FALSE}
+
+dat$prop.wood.rem <- dat$perc.wood.rem / 100
+
+fit2 <- brm(prop.wood.rem ~  trat * days.sc + (1 | plot.f), data = dat, chains = chains, family = Beta(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit2, "./data/processed/prop.wood.rem_model.RDS")
+```
+
+```{r, results='asis'}
+
+html_summary(read.file = "./data/processed/prop.wood.rem_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+# K
+
+## Litter
+
+Correlation between Silvia's and Andrea's K
+
+```{r, eval = TRUE}
+k_vals <- read.csv("./data/raw/k-values-corr.csv")
+
+cor(k_vals$av.k.litter, k_vals$sil.k.litter)
+cor(k_vals$av.k.wood, k_vals$sil.k.wood)
+```
+
+Comparing all treatments vs control
+
+```{r, eval = FALSE}
+
+fit_k.litter <- brm(sil.k.litter ~  Treatment  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_k.litter, "./data/processed/k_litter_model.RDS")
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(gsub.pattern = "b_treatment|b_", gsub.replacement = "", read.file = "./data/processed/k_litter_model.RDS")
+
+```
+
+Phosphorus vs no-phosphorus
+```{r, eval = FALSE}
+
+fit_k.litter.p.np <- brm(sil.k.litter ~  p.treat  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, , control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_k.litter.p.np, "./data/processed/k_litter_p_nop_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/k_litter_p_nop_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+Nitrogen vs no-nitrogen
+```{r, eval = FALSE}
+
+fit_k.litter.n.nn <- brm(sil.k.litter ~  n.treat  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_k.litter.n.nn, "./data/processed/k_litter_n_no_n_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/k_litter_n_no_n_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+## Wood
+
+Comparing all treatments vs control
+
+```{r}
+
+agg_kvals <- aggregate(sil.k.wood ~ Treatment, k_vals, mean)
+agg_kvals$se <- aggregate(sil.k.wood ~ Treatment, k_vals, se)$sil.k.wood
+agg_kvals$sd <- aggregate(sil.k.wood ~ Treatment, k_vals, sd)$sil.k.wood
+
+agg_kvals$treat <- factor(agg_kvals$Treatment, levels = c("C", "N", "P", "NP"))
+
+ggplot(k_vals, aes(x = Treatment, y = sil.k.wood)) +
+  geom_violin(fill = "#21908C4D") + labs(y = "Decomposition constant (k)") +
+  geom_pointrange(data = agg_kvals, aes(ymin = sil.k.wood -se, ymax = sil.k.wood + se))
+
+```
+
+```{r, eval = FALSE}
+
+fit_k.wood.p.treat <- brm(sil.k.wood ~  Treatment  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_k.wood.p.treat, "./data/processed/k_wood_treatment_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/k_wood_treatment_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+Phosphorus vs no-phosphorus
+
+```{r}
+
+agg_kvals <- aggregate(sil.k.wood ~ p.treat, k_vals, mean)
+agg_kvals$se <- aggregate(sil.k.wood ~ p.treat, k_vals, se)$sil.k.wood
+agg_kvals$sd <- aggregate(sil.k.wood ~ p.treat, k_vals, sd)$sil.k.wood
+
+
+agg_kvals$p.treat <- factor(agg_kvals$p.treat, labels = c("No P", "P"))
+
+k_vals$p.treat <- factor(k_vals$p.treat, labels = c("No P", "P"))
+
+ggplot(k_vals, aes(x = p.treat, y = sil.k.wood)) +
+  geom_violin(fill = "#21908C4D") + labs(y = "Decomposition constant (k)", x = "P treatment") +
+  geom_pointrange(data = agg_kvals, aes(ymin = sil.k.wood -se, ymax = sil.k.wood + se))
+
+```
+
+```{r, eval = FALSE}
+
+fit_k.wood.p.no.p <- brm(sil.k.wood ~  p.treat  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_k.wood.p.no.p, "./data/processed/k_wood_p_no_p_model.RDS")
+
+```
+
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/k_wood_p_no_p_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+
+Nitrogen vs no-nitrogen
+
+```{r}
+
+agg_kvals <- aggregate(sil.k.wood ~ n.treat, k_vals, mean)
+agg_kvals$se <- aggregate(sil.k.wood ~ n.treat, k_vals, se)$sil.k.wood
+agg_kvals$sd <- aggregate(sil.k.wood ~ n.treat, k_vals, sd)$sil.k.wood
+
+
+agg_kvals$n.treat <- factor(agg_kvals$n.treat, labels = c("No N", "N"))
+
+k_vals$n.treat <- factor(k_vals$n.treat, labels = c("No N", "N"))
+
+ggplot(k_vals, aes(x = n.treat, y = sil.k.wood)) +
+  geom_violin(fill = "#21908C4D") + labs(y = "Decomposition constant (k)", x = "N treatment") +
+  geom_pointrange(data = agg_kvals, aes(ymin = sil.k.wood -se, ymax = sil.k.wood + se))
+
+```
+
+```{r, eval = FALSE}
+
+fit_k.wood.n.no.n <- brm(sil.k.wood ~  n.treat  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_k.wood.n.no.n, "./data/processed/k_wood_n_no_n_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/k_wood_n_no_n_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+# Nutrient content by remaining litter mass
+
+Nitrogen
+```{r}
+
+nutr$prom.hoja.reman.sc <- scale(nutr$prom.hoja.reman)
+
+ggplot(data = nutr, aes(x = prom.hoja.reman, y = perc.n, color = treat)) +
+  geom_point() + labs(x = "Remaining litter mass (% initial)", y = "Litter N concentration (%)", color = "Treatment") +
+  scale_color_viridis_d(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_x_reverse()
+
+```
+
+```{r, eval = FALSE}
+
+fit_pern_by_rem_leave <- brm(perc.n ~  prom.hoja.reman.sc * treat  + (1 | plot), data = nutr, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_pern_by_rem_leave, "./data/processed/n_per_by_leave_rem_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/n_per_by_leave_rem_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+Phosphorus
+
+```{r}
+
+ggplot(data = sub.nutr, aes(x = prom.hoja.reman, y = perc.p, color = treat)) +
+  geom_point() + labs(x = "Remaining litter mass (% initial)", y = "Litter P concentration (%)", color = "Treatment") +
+    scale_color_viridis_d(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_x_reverse()
+
+```
+
+```{r, eval = FALSE}
+
+fit_perp_by_rem_leave <- brm(perc.p ~  prom.hoja.reman.sc * treat  + (1 | plot), data = sub.nutr, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit_perp_by_rem_leave, "./data/processed/p_per_by_leave_rem_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/p_per_by_leave_rem_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+<!-- light brown box -->
+
+<div class="alert alert-success">
+
+# Takeaways
+
+- Nitrogen percentage, but no Phosphorus percentage, increases along with remaining litter mass 
+
+</div>
+
+&nbsp;
+
+# Nutrient ratios
+
+C:N 
+```{r}
+
+# excluding plot 9
+agg_cn <- aggregate(cn.mol.kg ~ colecta + treat + days, nutr, mean)
+
+agg_cn$sd <- aggregate(cn.mol.kg ~ colecta + treat + days, nutr, sd)$cn.mol.kg
+
+agg_cn$se <- aggregate(cn.mol.kg  ~ colecta + treat + days, nutr, se)$cn.mol.kg
+
+
+agg_cn$treat <- factor(agg_cn$treat, levels = c("C", "N", "P", "NP"))
+
+
+pd <- position_dodge(15)
+
+ggplot(agg_cn, aes(x = days, y = cn.mol.kg, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = cn.mol.kg + se, ymin = cn.mol.kg - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter C:N ratio", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_cn$days),
+    labels = unique(agg_cn$days)) + theme(legend.position = c(0.9, 0.8))  
+
+```
+
+```{r, eval = FALSE}
+
+fit.cn <- brm(cn.mol.kg ~  treat * days.sc + (1 | plot.f), data = nutr, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+fit.cn
+
+saveRDS(fit.cn, "./data/processed/cn_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/cn_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+N:P
+```{r}
+
+# excluding plot 9
+agg_np <- aggregate(np.mol.kg ~ colecta + treat + days, sub.nutr, mean)
+
+agg_np$sd <- aggregate(np.mol.kg ~ colecta + treat + days, sub.nutr, sd)$np.mol.kg
+
+agg_np$se <- aggregate(np.mol.kg  ~ colecta + treat + days, sub.nutr, se)$np.mol.kg
+
+
+agg_np$treat <- factor(agg_np$treat, levels = c("C", "N", "P", "NP"))
+
+
+pd <- position_dodge(15)
+
+ggplot(agg_np, aes(x = days, y = np.mol.kg, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = np.mol.kg + se, ymin = np.mol.kg - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter N:P ratio", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_np$days),
+    labels = unique(agg_np$days)) + theme(legend.position = c(0.2, 0.8)) 
+
+```
+
+```{r, eval = FALSE}
+
+fit.np <- brm(np.mol.kg ~  treat * days.sc + (1 | plot.f), data = sub.nutr, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15))
+
+saveRDS(fit.np, "./data/processed/np_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/np_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+
+C:P
+```{r}
+
+# excluding plot 9
+agg_cp <- aggregate(cp.mol.kg ~ colecta + treat + days, sub.nutr, mean)
+
+agg_cp$sd <- aggregate(cp.mol.kg ~ colecta + treat + days, sub.nutr, sd)$cp.mol.kg
+
+agg_cp$se <- aggregate(cp.mol.kg  ~ colecta + treat + days, sub.nutr, se)$cp.mol.kg
+
+agg_cp$treat <- factor(agg_cp$treat, levels = c("C", "N", "P", "NP"))
+
+
+pd <- position_dodge(15)
+
+ggplot(agg_cp, aes(x = days, y = cp.mol.kg, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = cp.mol.kg + se, ymin = cp.mol.kg - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5) +
+    labs(x= "Time (days)", y = "Litter C:P ratio", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_cp$days),
+    labels = unique(agg_cp$days)) + theme(legend.position = c(0.9, 0.8)) 
+
+```
+
+```{r, eval = FALSE}
+
+fit.cp <- brm(cp.mol.kg ~  treat * days.sc + (1 | plot.f), data = sub.nutr, chains = chains, family = gaussian(), iter = iters)
+
+fit.cp
+
+saveRDS(fit.cp, "./data/processed/cp_model.RDS")
+
+```
+
+```{r, eval = TRUE, results='asis'}
+
+html_summary(read.file = "./data/processed/cp_model.RDS", gsub.pattern = "b_treatment|b_", gsub.replacement = "")
+
+```
+---
+
+&nbsp; 
+ 
+<!-- add packages used, system details and versions  -->
+ 
+<font size="4">Session information</font>
+
+```{r session info, echo=F}
+
+sessionInfo()
+
+```
