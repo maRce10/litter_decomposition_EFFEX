@@ -149,7 +149,11 @@ ggplot(agg_n, aes(x = days, y = litter.n.content.perc.initial, color = treat)) +
 scale_x_continuous(breaks = unique(agg_n$days),
     labels = unique(agg_n$days)) + theme(legend.position = c(0.9, 0.8))
 
+
+ggsave("./output/Litter_N_content.tiff", dpi = 300)
 ```
+
+Download image hee
 
 ```{r, eval = FALSE}
 

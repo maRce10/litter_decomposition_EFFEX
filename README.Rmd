@@ -1,8 +1,8 @@
 ---
 title: litter_decomposition
-author: AUTOR NAME
+author: <a href="marceloarayasalas.weebly.com/">Marcelo Araya-Salas</a> & Andrea Vincent
 output: github_document
-date: `r format(Sys.Date(), "%d-%m-%Y")`
+date: "`r Sys.Date()`"
 editor_options:
   chunk_output_type: console
 ---
