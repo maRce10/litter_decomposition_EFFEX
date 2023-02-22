@@ -78,16 +78,17 @@ knitr::opts_chunk$set(
 # remotes::install_github("rlesur/klippy")
 
 # github packages must include user name ("user/package")
-pkgs <- c("rlesur/klippy", "kableExtra", "knitr", "readxl", "ggplot2", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "viridis", "brms")
+pkgs <- c("kableExtra", "knitr", "readxl", "ggplot2", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "viridis", "brms", "ggdist")
 
 # install/ load packages
 sketchy::load_packages(pkgs, quite = TRUE, upgrade.deps = TRUE)
 
 ```
 
-```{r functions and global parameters, echo = FALSE, message = FALSE, warning=FALSE}
+```{r functions and global parameters, echo = TRUE, message = FALSE, warning=FALSE}
 
 cols <- viridis(10, alpha = 0.7)
+fill_color <- viridis(10)[7]
 
 # brms models
 chains <- 4
@@ -102,10 +103,12 @@ ggplot2::theme_set(theme_classic(base_size = 20))
 # standard error
 se <- function(x) sd(x) / sqrt(length(x))
 
+```
+
+```{r, echo=FALSE}
 source("~/Dropbox/R_package_testing/brmsish/R/html_summary.R")
 source("~/Dropbox/R_package_testing/brmsish/R/helpers.R")
 source("~/Dropbox/R_package_testing/brmsish/R/check_rds_models.R")
-
 ```
 
 
@@ -164,24 +167,24 @@ Concentration
 
 ```{r}
 
-agg_n <- aggregate(perc.n ~ colecta + treat + days, nutr, mean)
+agg_conc_n <- aggregate(perc.n ~ colecta + treat + days, nutr, mean)
 
-agg_n$sd <- aggregate(perc.n ~ colecta + treat + days, nutr, sd)$perc.n
+agg_conc_n$sd <- aggregate(perc.n ~ colecta + treat + days, nutr, sd)$perc.n
 
-agg_n$se <- aggregate(perc.n  ~ colecta + treat + days, nutr, se)$perc.n
+agg_conc_n$se <- aggregate(perc.n  ~ colecta + treat + days, nutr, se)$perc.n
 
-agg_n$treat <- factor(agg_n$treat, levels = c("C", "N", "P", "NP"))
+agg_conc_n$treat <- factor(agg_conc_n$treat, levels = c("C", "N", "P", "NP"))
 
 pd <- position_dodge(15)
 
-ggplot(agg_n, aes(x = days, y = perc.n, color = treat)) +
+ggplot(agg_conc_n, aes(x = days, y = perc.n, color = treat)) +
     geom_point(size= 2, position = pd) + 
     geom_errorbar(aes(ymax = perc.n + se, ymin = perc.n - se), width = 0, position = pd) + 
     geom_line(size = 1.2, position = pd) + 
     scale_color_viridis_d(alpha = 0.5) +
     labs(x= "Time (days)", y = "Litter N concentration (%)", color = "Treatment") +
-scale_x_continuous(breaks = unique(agg_n$days),
-    labels = unique(agg_n$days)) + theme(legend.position = c(0.3, 0.8)) 
+scale_x_continuous(breaks = unique(agg_conc_n$days),
+    labels = unique(agg_conc_n$days)) + theme(legend.position = c(0.3, 0.8)) 
 
 ```
 
@@ -247,24 +250,24 @@ Concentration
 
 ```{r}
 
-agg_p <- aggregate(perc.p ~ colecta + treat + days, sub.nutr, mean)
+agg_conc_p <- aggregate(perc.p ~ colecta + treat + days, sub.nutr, mean)
 
-agg_p$sd <- aggregate(perc.p ~ colecta + treat + days, sub.nutr, sd)$perc.p
+agg_conc_p$sd <- aggregate(perc.p ~ colecta + treat + days, sub.nutr, sd)$perc.p
 
-agg_p$se <- aggregate(perc.p  ~ colecta + treat + days, sub.nutr, se)$perc.p
+agg_conc_p$se <- aggregate(perc.p  ~ colecta + treat + days, sub.nutr, se)$perc.p
 
-agg_p$treat <- factor(agg_p$treat, levels = c("C", "N", "P", "NP"))
+agg_conc_p$treat <- factor(agg_conc_p$treat, levels = c("C", "N", "P", "NP"))
 
 pd <- position_dodge(15)
 
-ggplot(agg_p, aes(x = days, y = perc.p, color = treat)) +
+ggplot(agg_conc_p, aes(x = days, y = perc.p, color = treat)) +
     geom_point(size= 2, position = pd) + 
     geom_errorbar(aes(ymax = perc.p + se, ymin = perc.p - se), width = 0, position = pd) + 
     geom_line(size = 1.2, position = pd) + 
     scale_color_viridis_d(alpha = 0.5) +
     labs(x= "Time (days)", y = "Litter P concentration (%)", color = "Treatment")  +
-scale_x_continuous(breaks = unique(agg_p$days),
-    labels = unique(agg_p$days)) + theme(legend.position = c(0.9, 0.8))
+scale_x_continuous(breaks = unique(agg_conc_p$days),
+    labels = unique(agg_conc_p$days)) + theme(legend.position = c(0.9, 0.8))
 
 ```
 
@@ -401,6 +404,58 @@ cor(k_vals$av.k.wood, k_vals$sil.k.wood)
 
 Comparing all treatments vs control
 
+```{r}
+
+agg_kvals <- aggregate(sil.k.litter ~ Treatment, k_vals, mean)
+agg_kvals$se <- aggregate(sil.k.litter ~ Treatment, k_vals, se)$sil.k.litter
+agg_kvals$sd <- aggregate(sil.k.litter ~ Treatment, k_vals, sd)$sil.k.litter
+agg_kvals$n <- aggregate(sil.k.litter ~ Treatment, k_vals, length)$sil.k.litter
+agg_kvals$treat <- factor(agg_kvals$Treatment, levels = c("C", "N", "P", "NP"))
+agg_kvals$n.labels <- paste("n =", agg_kvals$n) 
+
+# composed box plot
+ggplot(k_vals, aes(x = Treatment, y = sil.k.litter)) +
+## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    fill = fill_color,
+    alpha = 0.5,
+    ## custom bandwidth
+    adjust = .5,
+    ## adjust height
+    width = .6,
+    .width = 0,
+    ## move geom to the cright
+    justification = -.2,
+    point_colour = NA
+  ) +
+  geom_boxplot(fill = fill_color,
+    width = .15,
+    ## remove outliers
+    outlier.shape = NA ## `outlier.shape = NA` works as well
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    color = fill_color,
+    ## draw jitter on the left
+    side = "l",
+    ## control range of jitter
+    range_scale = .4,
+    ## add some transparency
+    alpha = .5,
+    transformation = ggplot2::position_jitter(height = 0)
+
+  ) +
+   labs(y = "Decomposition constant (k)") +
+  # ylim(c(-0.39, 0.145)) +
+  geom_text(data = agg_kvals, aes(y = rep(0.4, nrow(agg_kvals)), x = Treatment, label = n.labels), nudge_x = 0, size = 6) +
+     theme_classic(base_size = 18) +
+theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+    scale_x_discrete(labels=c("C" = "Control", "N" = "+N",
+                              "NP" = "+NP", "P" = "+P"))
+
+```
+
+
 ```{r, eval = FALSE}
 
 fit_k.litter <- brm(sil.k.litter ~  Treatment  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15), cores = chains, prior = prior, file = "./data/processed/k_litter_model", file_refit = "on_change")
@@ -450,18 +505,55 @@ Comparing all treatments vs control
 agg_kvals <- aggregate(sil.k.wood ~ Treatment, k_vals, mean)
 agg_kvals$se <- aggregate(sil.k.wood ~ Treatment, k_vals, se)$sil.k.wood
 agg_kvals$sd <- aggregate(sil.k.wood ~ Treatment, k_vals, sd)$sil.k.wood
-
+agg_kvals$n <- aggregate(sil.k.wood ~ Treatment, k_vals, length)$sil.k.wood
 agg_kvals$treat <- factor(agg_kvals$Treatment, levels = c("C", "N", "P", "NP"))
+agg_kvals$n.labels <- paste("n =", agg_kvals$n) 
 
+# composed box plot
 ggplot(k_vals, aes(x = Treatment, y = sil.k.wood)) +
-  geom_violin(fill = "#21908C4D") + labs(y = "Decomposition constant (k)") +
-  geom_pointrange(data = agg_kvals, aes(ymin = sil.k.wood -se, ymax = sil.k.wood + se))
+## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    fill = fill_color,
+    alpha = 0.5,
+    ## custom bandwidth
+    adjust = .5,
+    ## adjust height
+    width = .6,
+    .width = 0,
+    ## move geom to the cright
+    justification = -.2,
+    point_colour = NA
+  ) +
+  geom_boxplot(fill = fill_color,
+    width = .15,
+    ## remove outliers
+    outlier.shape = NA ## `outlier.shape = NA` works as well
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    color = fill_color,
+    ## draw jitter on the left
+    side = "l",
+    ## control range of jitter
+    range_scale = .4,
+    ## add some transparency
+    alpha = .5,
+    transformation = ggplot2::position_jitter(height = 0)
+
+  ) +
+   labs(y = "Decomposition constant (k)") +
+  # ylim(c(-0.39, 0.145)) +
+  geom_text(data = agg_kvals, aes(y = rep(-0.387, nrow(agg_kvals)), x = Treatment, label = n.labels), nudge_x = 0, size = 6) +
+     theme_classic(base_size = 18) +
+theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+    scale_x_discrete(labels=c("C" = "Control", "N" = "+N",
+                              "NP" = "+NP", "P" = "+P"))
 
 ```
 
 ```{r, eval = FALSE}
 
-fit_k.wood.p.treat <- brm(sil.k.wood ~  Treatment  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters, control = list(adapt_delta=0.99, max_treedepth=15), cores = chains, prior = prior, file = "./data/processed/k_wood_treatment_model", file_refit = "on_change")
+fit_k.wood.p.treat <- brm(sil.k.wood ~  Treatment  + (1 | quadrat), data = k_vals, chains = chains, family = gaussian(), iter = iters * 2, control = list(adapt_delta=0.99, max_treedepth=15), cores = chains, prior = prior, file = "./data/processed/k_wood_treatment_model", file_refit = "on_change")
 
 ```
 
@@ -481,12 +573,50 @@ agg_kvals$sd <- aggregate(sil.k.wood ~ p.treat, k_vals, sd)$sil.k.wood
 
 
 agg_kvals$p.treat <- factor(agg_kvals$p.treat, labels = c("No P", "P"))
+agg_kvals$n <- aggregate(sil.k.wood ~ p.treat, k_vals, length)$sil.k.wood
+agg_kvals$n.labels <- paste("n =", agg_kvals$n) 
+
 
 k_vals$p.treat <- factor(k_vals$p.treat, labels = c("No P", "P"))
 
+
+# composed box plot
 ggplot(k_vals, aes(x = p.treat, y = sil.k.wood)) +
-  geom_violin(fill = "#21908C4D") + labs(y = "Decomposition constant (k)", x = "P treatment") +
-  geom_pointrange(data = agg_kvals, aes(ymin = sil.k.wood -se, ymax = sil.k.wood + se))
+## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    fill = fill_color,
+    alpha = 0.5,
+    ## custom bandwidth
+    adjust = .5,
+    ## adjust height
+    width = .6,
+    .width = 0,
+    ## move geom to the cright
+    justification = -.2,
+    point_colour = NA
+  ) +
+  geom_boxplot(fill = fill_color,
+    width = .15,
+    ## remove outliers
+    outlier.shape = NA ## `outlier.shape = NA` works as well
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    color = fill_color,
+    ## draw jitter on the left
+    side = "l",
+    ## control range of jitter
+    range_scale = .4,
+    ## add some transparency
+    alpha = .5,
+    transformation = ggplot2::position_jitter(height = 0)
+
+  ) +
+  labs(y = "Decomposition constant (k)", x = "P treatment") +
+  geom_text(data = agg_kvals, aes(y = rep(-0.387, nrow(agg_kvals)), x = p.treat, label = n.labels), nudge_x = 0, size = 6) +
+     theme_classic(base_size = 18) +
+theme(axis.text.x = element_text(angle = 30, hjust = 1))  +
+    scale_x_discrete(labels=c("No P" = "No P", "P" = "+P"))
 
 ```
 
@@ -511,15 +641,49 @@ html_summary(read.file = "./data/processed/k_wood_p_no_p_model.rds", gsub.patter
 agg_kvals <- aggregate(sil.k.wood ~ n.treat, k_vals, mean)
 agg_kvals$se <- aggregate(sil.k.wood ~ n.treat, k_vals, se)$sil.k.wood
 agg_kvals$sd <- aggregate(sil.k.wood ~ n.treat, k_vals, sd)$sil.k.wood
-
-
 agg_kvals$n.treat <- factor(agg_kvals$n.treat, labels = c("No N", "N"))
-
+agg_kvals$n <- aggregate(sil.k.wood ~ n.treat, k_vals, length)$sil.k.wood
+agg_kvals$n.labels <- paste("n =", agg_kvals$n) 
 k_vals$n.treat <- factor(k_vals$n.treat, labels = c("No N", "N"))
 
+# composed box plot
 ggplot(k_vals, aes(x = n.treat, y = sil.k.wood)) +
-  geom_violin(fill = "#21908C4D") + labs(y = "Decomposition constant (k)", x = "N treatment") +
-  geom_pointrange(data = agg_kvals, aes(ymin = sil.k.wood -se, ymax = sil.k.wood + se))
+## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    fill = fill_color,
+    alpha = 0.5,
+    ## custom bandwidth
+    adjust = .5,
+    ## adjust height
+    width = .6,
+    .width = 0,
+    ## move geom to the cright
+    justification = -.2,
+    point_colour = NA
+  ) +
+  geom_boxplot(fill = fill_color,
+    width = .15,
+    ## remove outliers
+    outlier.shape = NA ## `outlier.shape = NA` works as well
+  ) +
+  ## add justified jitter from the {gghalves} package
+  gghalves::geom_half_point(
+    color = fill_color,
+    ## draw jitter on the left
+    side = "l",
+    ## control range of jitter
+    range_scale = .4,
+    ## add some transparency
+    alpha = .5,
+    transformation = ggplot2::position_jitter(height = 0)
+
+  ) +
+  labs(y = "Decomposition constant (k)", x = "P treatment") +
+  geom_text(data = agg_kvals, aes(y = rep(-0.387, nrow(agg_kvals)), x = n.treat, label = n.labels), nudge_x = 0, size = 6) +
+     theme_classic(base_size = 18) +
+theme(axis.text.x = element_text(angle = 30, hjust = 1))  +
+    scale_x_discrete(labels=c("No P" = "No P", "P" = "+P"))
+
 
 ```
 
@@ -614,7 +778,6 @@ agg_cn$se <- aggregate(cn.mol.kg  ~ colecta + treat + days, nutr, se)$cn.mol.kg
 
 
 agg_cn$treat <- factor(agg_cn$treat, levels = c("C", "N", "P", "NP"))
-
 
 pd <- position_dodge(15)
 
@@ -719,11 +882,82 @@ html_summary(read.file = "./data/processed/cp_model.rds", gsub.pattern = "b_trea
 ```
 ---
 
+# Combined plots
+
+## Litter content
+```{r, out.width="100%", out.height="140%"}
+
+agg_p$nutrient <- "P"
+agg_n$nutrient <- "N"
+
+names(agg_n) <- names(agg_p) <- c("colecta", "treat", "days", "perc", "sd", "se", "nutrient")
+
+agg_np2 <- rbind(agg_n, agg_p)
+
+ggplot(agg_np2, aes(x = days, y = perc, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = perc + se, ymin = perc - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5, labels = c("Control", "+N", "+P", "+NP")) +
+    labs(x= "Time (days)", y = "Nutrient ratios", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_p$days),
+    labels = unique(agg_p$days)) +
+    facet_wrap(~ nutrient, nrow = 2, scales = "free_y") 
+
+```
+
+## Concentration
+```{r, out.width="100%", out.height="140%"}
+
+agg_conc_p$nutrient <- "P"
+agg_conc_n$nutrient <- "N"
+
+names(agg_conc_n) <- names(agg_conc_p) <- c("colecta", "treat", "days", "perc", "sd", "se", "nutrient")
+
+agg_conc_np <- rbind(agg_conc_n, agg_conc_p)
+
+ggplot(agg_conc_np, aes(x = days, y = perc, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = perc + se, ymin = perc - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5, labels = c("Control", "+N", "+P", "+NP")) +
+    labs(x= "Time (days)", y = "Litter content (%)", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_conc_p$days),
+    labels = unique(agg_conc_p$days)) + 
+    facet_wrap(~ nutrient, nrow = 2, scales = "free_y") 
+
+```
+
+## Nutrient ratios
+```{r, out.width="100%", out.height="180%"}
+
+agg_cn$nutrients <- "C:N"
+agg_cp$nutrients <- "C:P"
+agg_np$nutrients <- "N:P"
+
+names(agg_cn) <- names(agg_cp) <- names(agg_np) <- c("colecta", "treat", "days", "mol.kg", "sd", "se", "nutrients")
+
+agg_ratios <- rbind(agg_cn[, names(agg_cn)], agg_cp[, names(agg_cn)], agg_np[, names(agg_cn)])
+
+ggplot(agg_ratios, aes(x = days, y = mol.kg, color = treat)) +
+    geom_point(size= 2, position = pd) + 
+    geom_errorbar(aes(ymax = mol.kg + se, ymin = mol.kg - se), width = 0, position = pd) + 
+    geom_line(size = 1.2, position = pd) + 
+    scale_color_viridis_d(alpha = 0.5, labels = c("Control", "+N", "+P", "+NP")) +
+    labs(x= "Time (days)", y = "Litter content (%)", color = "Treatment") +
+scale_x_continuous(breaks = unique(agg_ratios$days),
+    labels = unique(agg_ratios$days)) + 
+    facet_wrap(~ nutrients, nrow = 3, scales = "free_y") 
+
+```
+
+
 # Combined model diagnostics
 
 ```{r, eval = TRUE}
 
 check_rds_models(path = "./data/processed", html = TRUE)
+
 ```
 
 

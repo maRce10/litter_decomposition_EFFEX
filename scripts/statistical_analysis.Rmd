@@ -92,58 +92,8 @@ ggplot2::theme_set(theme_classic(base_size = 20))
 se <- function(x) sd(x) / sqrt(length(x))
 
 source("~/Dropbox/R_package_testing/brmsish/R/html_summary.R")
-# print results brms models
-# html_summary <- function(x, gsub.pattern = NULL, gsub.replacement = NULL, xlab = "Effect size"){
-#   
-#   summ <- summary(x)$fixed
-#   fit <- x$fit  
-#   betas <- grep("^b_", names(fit@sim$samples[[1]]), value = TRUE)  
-#   hdis <- t(sapply(betas, function(y)   hdi(fit@sim$samples[[1]][[y]]))
-# )
-#   summ_table <- data.frame(summ, hdis, iterations = attr(fit, "stan_args")[[1]]$iter, chains = length(attr(fit, "stan_args")))
-#   summ_table <- summ_table[rownames(summ_table) != "Intercept", c("Estimate", "Rhat", "Bulk_ESS", "l.95..CI", "u.95..CI", "iterations", "chains")]
-#   
-#   summ_table <- as.data.frame(summ_table)  
-#   summ_table$Rhat <- round(summ_table$Rhat, digits = 3)  
-#   summ_table$CI_low <- round(unlist(summ_table$l.95..CI), digits = 3)  
-#   summ_table$CI_high <- round(unlist(summ_table$u.95..CI), digits = 3)  
-#   summ_table$l.95..CI <- summ_table$u.95..CI <- NULL
-#   
-#     out <- lapply(betas, function(y)  data.frame(variable = y, value = sort(fit@sim$samples[[1]][[y]], decreasing = FALSE)))
-#   
-#   posteriors <- do.call(rbind, out)
-#   posteriors <- posteriors[posteriors$variable != "b_Intercept", ]
-#   
-#   if (!is.null(gsub.pattern) & !is.null(gsub.replacement))
-#     posteriors$variable <- gsub(pattern = gsub.pattern, replacement = gsub.replacement, posteriors$variable)
-#   
-#    gg <- ggplot(data = posteriors, aes(y = variable, x = value, fill = stat(quantile))) + 
-#   geom_density_ridges_gradient(quantile_lines = TRUE, quantile_fun = HDInterval::hdi,  vline_linetype = 2) + 
-#   theme_classic() + 
-#       labs(x = xlab, y = "Predictor") + 
-#      xlim(range(c(min(summ_table[ , "CI_low"]), max(summ_table[ , "CI_high"])), 0)) +
-#   geom_vline(xintercept = 0, col = "red") + 
-#   scale_fill_manual(values = c("transparent", "#21908C4D", "transparent"), guide = "none") + ggtitle(x$formula)
-# 
-#   if (!is.null(gsub.pattern) & !is.null(gsub.replacement))
-#     rownames(summ_table) <- gsub(pattern = gsub.pattern, replacement = gsub.replacement, rownames(summ_table))
-#    
-#   summ_table$Rhat <- ifelse(summ_table$Rhat > 1.05, cell_spec(summ_table$Rhat, "html", color ="white", background = "red", bold = TRUE,  font_size = 12),  cell_spec(summ_table$Rhat, "html"))
-#   
-#   signif <- summ_table[,"CI_low"] * summ_table[,"CI_high"] > 0
-#   
-#   df1 <- kbl(summ_table, row.names = TRUE, escape = FALSE, format = "html", digits = 3)
-#     
-#   df1 <- row_spec(kable_input = df1,row =  which(summ_table$CI_low * summ_table$CI_high > 0), background = adjustcolor(cols[9], alpha.f = 0.3))
-# 
-#   df1 <- kable_styling(df1, bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE, font_size = 12)
-#   
-#   print(df1)
-#   
-#   print(gg)
-# 
-# }
-
+source("~/Dropbox/R_package_testing/brmsish/R/check_rds_models.R")
+source("~/Dropbox/R_package_testing/brmsish/R/helpers.R")
 
 ```
 
